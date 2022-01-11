@@ -31,8 +31,15 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
     androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.2.0'
+  implementation 'junit:junit'
   constraints {
     implementation('junit:junit:4.13.1') {
+      because 'previous versions have a bug impacting this application'
+    }
+  }
+  implementation 'com.google.code.gson:gson'
+  constraints {
+    implementation('com.google.code.gson:gson:2.8.9') {
       because 'previous versions have a bug impacting this application'
     }
   }
