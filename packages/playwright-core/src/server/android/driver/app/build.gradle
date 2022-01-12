@@ -43,9 +43,9 @@ dependencies {
       because 'previous versions have a bug impacting this application'
     }
   }
-  implementation 'Upgrade to version: org.apache.commons:commons-compress'
+  implementation 'org.apache.commons:commons-compress'
   constraints {
-    implementation('Upgrade to version: org.apache.commons:commons-compress:1.21') {
+    implementation('org.apache.commons:commons-compress:1.21') {
       because 'previous versions have a bug impacting this application'
     }
   }
