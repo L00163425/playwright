@@ -61,6 +61,12 @@ dependencies {
       because 'previous versions have a bug impacting this application'
     }
   }
+  implementation 'org.bouncycastle:bcprov-jdk15on'
+  constraints {
+    implementation('org.bouncycastle:bcprov-jdk15on:1.64') {
+      because 'previous versions have a bug impacting this application'
+    }
+  }
 
 
 }
