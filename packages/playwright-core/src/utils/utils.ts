@@ -22,10 +22,10 @@ import * as crypto from 'crypto';
 import os from 'os';
 import http from 'http';
 import https from 'https';
-import { spawn, SpawnOptions } from 'child_process';
+import { spawn, SpawnOptions, execSync } from 'child_process';
 import { getProxyForUrl } from 'proxy-from-env';
 import * as URL from 'url';
-import { getUbuntuVersionSync } from './ubuntuVersion';
+import { getUbuntuVersionSync, parseOSReleaseText } from './ubuntuVersion';
 import { NameValue } from '../protocol/channels';
 import ProgressBar from 'progress';
 
@@ -115,8 +115,13 @@ export function fetchData(params: HTTPRequestParams, onError?: (params: HTTPRequ
 
 type OnProgressCallback = (downloadedBytes: number, totalBytes: number) => void;
 type DownloadFileLogger = (message: string) => void;
+type DownloadFileOptions = {
+  progressCallback?: OnProgressCallback,
+  log?: DownloadFileLogger,
+  userAgent?: string
+};
 
-function downloadFile(url: string, destinationPath: string, options: {progressCallback?: OnProgressCallback, log?: DownloadFileLogger} = {}): Promise<{error: any}> {
+function downloadFile(url: string, destinationPath: string, options: DownloadFileOptions = {}): Promise<{error: any}> {
   const {
     progressCallback,
     log = () => {},
@@ -130,7 +135,12 @@ function downloadFile(url: string, destinationPath: string, options: {progressCa
 
   const promise: Promise<{error: any}> = new Promise(x => { fulfill = x; });
 
-  httpRequest({ url }, response => {
+  httpRequest({
+    url,
+    headers: options.userAgent ? {
+      'User-Agent': options.userAgent,
+    } : undefined,
+  }, response => {
     log(`-- response status code: ${response.statusCode}`);
     if (response.statusCode !== 200) {
       const error = new Error(`Download failed: server returned code ${response.statusCode}. URL: ${url}`);
@@ -156,16 +166,19 @@ function downloadFile(url: string, destinationPath: string, options: {progressCa
   }
 }
 
+type DownloadOptions = {
+  progressBarName?: string,
+  retryCount?: number
+  log?: DownloadFileLogger
+  userAgent?: string
+};
+
 export async function download(
   url: string,
   destination: string,
-  options: {
-		progressBarName?: string,
-		retryCount?: number
-    log?: DownloadFileLogger
-	} = {}
+  options: DownloadOptions = {}
 ) {
-  const { progressBarName = 'file', retryCount = 3, log = () => {} } = options;
+  const { progressBarName = 'file', retryCount = 3, log = () => {}, userAgent } = options;
   for (let attempt = 1; attempt <= retryCount; ++attempt) {
     log(
         `downloading ${progressBarName} - attempt #${attempt}`
@@ -173,6 +186,7 @@ export async function download(
     const { error } = await downloadFile(url, destination, {
       progressCallback: getDownloadProgress(progressBarName),
       log,
+      userAgent,
     });
     if (!error) {
       log(`SUCCESS downloading ${progressBarName}`);
@@ -227,7 +241,7 @@ function toMegabytes(bytes: number) {
 }
 
 export function spawnAsync(cmd: string, args: string[], options: SpawnOptions = {}): Promise<{stdout: string, stderr: string, code: number | null, error?: Error}> {
-  const process = spawn(cmd, args, options);
+  const process = spawn(cmd, args, Object.assign({ windowsHide: true }, options));
 
   return new Promise(resolve => {
     let stdout = '';
@@ -311,6 +325,8 @@ const debugEnv = getFromENV('PWDEBUG') || '';
 export function debugMode() {
   if (debugEnv === 'console')
     return 'console';
+  if (debugEnv === '0' || debugEnv === 'false')
+    return '';
   return debugEnv ? 'inspector' : '';
 }
 
@@ -371,19 +387,6 @@ export function monotonicTime(): number {
   return seconds * 1000 + (nanoseconds / 1000 | 0) / 1000;
 }
 
-class HashStream extends stream.Writable {
-  private _hash = crypto.createHash('sha1');
-
-  override _write(chunk: Buffer, encoding: string, done: () => void) {
-    this._hash.update(chunk);
-    done();
-  }
-
-  digest(): string {
-    return this._hash.digest('hex');
-  }
-}
-
 export function objectToArray(map?:  { [key: string]: any }): NameValue[] | undefined {
   if (!map)
     return undefined;
@@ -400,17 +403,6 @@ export function arrayToObject(array?: NameValue[]): { [key: string]: string } | 
   for (const { name, value } of array)
     result[name] = value;
   return result;
-}
-
-export async function calculateFileSha1(filename: string): Promise<string> {
-  const hashStream = new HashStream();
-  const stream = fs.createReadStream(filename);
-  stream.on('open', () => stream.pipe(hashStream));
-  await new Promise((f, r) => {
-    hashStream.on('finish', f);
-    hashStream.on('error', r);
-  });
-  return hashStream.digest();
 }
 
 export function calculateSha1(buffer: Buffer | string): string {
@@ -445,8 +437,55 @@ export function canAccessFile(file: string) {
   }
 }
 
-export function getUserAgent() {
-  return `Playwright/${getPlaywrightVersion()} (${os.arch()}/${os.platform()}/${os.release()})`;
+let cachedUserAgent: string | undefined;
+export function getUserAgent(): string {
+  if (cachedUserAgent)
+    return cachedUserAgent;
+  try {
+    cachedUserAgent = determineUserAgent();
+  } catch (e) {
+    cachedUserAgent = 'Playwright/unknown';
+  }
+  return cachedUserAgent;
+}
+
+function determineUserAgent(): string {
+  let osIdentifier = 'unknown';
+  let osVersion = 'unknown';
+  if (process.platform === 'win32') {
+    const version = os.release().split('.');
+    osIdentifier = 'windows';
+    osVersion = `${version[0]}.${version[1]}`;
+  } else if (process.platform === 'darwin') {
+    const version = execSync('sw_vers -productVersion').toString().trim().split('.');
+    osIdentifier = 'macOS';
+    osVersion = `${version[0]}.${version[1]}`;
+  } else if (process.platform === 'linux') {
+    try {
+      // List of /etc/os-release values for different distributions could be
+      // found here: https://gist.github.com/aslushnikov/8ceddb8288e4cf9db3039c02e0f4fb75
+      const osReleaseText = fs.readFileSync('/etc/os-release', 'utf8');
+      const fields = parseOSReleaseText(osReleaseText);
+      osIdentifier = fields.get('id') || 'unknown';
+      osVersion = fields.get('version_id') || 'unknown';
+    } catch (e) {
+      // Linux distribution without /etc/os-release.
+      // Default to linux/unknown.
+      osIdentifier = 'linux';
+    }
+  }
+
+  let langName = 'unknown';
+  let langVersion = 'unknown';
+  if (!process.env.PW_LANG_NAME) {
+    langName = 'node';
+    langVersion = process.version.substring(1).split('.').slice(0, 2).join('.');
+  } else if (['node', 'python', 'java', 'csharp'].includes(process.env.PW_LANG_NAME)) {
+    langName = process.env.PW_LANG_NAME;
+    langVersion = process.env.PW_LANG_NAME_VERSION ?? 'unknown';
+  }
+
+  return `Playwright/${getPlaywrightVersion()} (${os.arch()}; ${osIdentifier} ${osVersion}) ${langName}/${langVersion}`;
 }
 
 export function getPlaywrightVersion(majorMinorOnly = false) {
@@ -538,3 +577,46 @@ export async function transformCommandsForRoot(commands: string[]): Promise<{ co
     return { command: 'sudo', args: ['--', 'sh', '-c', `${commands.join('&& ')}`], elevatedPermissions: true };
   return { command: 'su', args: ['root', '-c', `${commands.join('&& ')}`], elevatedPermissions: true };
 }
+
+export class SigIntWatcher {
+  private _hadSignal: boolean = false;
+  private _sigintPromise: Promise<void>;
+  private _sigintHandler: () => void;
+  constructor() {
+    let sigintCallback: () => void;
+    this._sigintPromise = new Promise<void>(f => sigintCallback = f);
+    this._sigintHandler = () => {
+      // We remove the handler so that second Ctrl+C immediately kills the runner
+      // via the default sigint handler. This is handy in the case where our shutdown
+      // takes a lot of time or is buggy.
+      //
+      // When running through NPM we might get multiple SIGINT signals
+      // for a single Ctrl+C - this is an NPM bug present since at least NPM v6.
+      // https://github.com/npm/cli/issues/1591
+      // https://github.com/npm/cli/issues/2124
+      //
+      // Therefore, removing the handler too soon will just kill the process
+      // with default handler without printing the results.
+      // We work around this by giving NPM 1000ms to send us duplicate signals.
+      // The side effect is that slow shutdown or bug in our runner will force
+      // the user to hit Ctrl+C again after at least a second.
+      setTimeout(() => process.off('SIGINT', this._sigintHandler), 1000);
+      this._hadSignal = true;
+      sigintCallback();
+    };
+    process.on('SIGINT', this._sigintHandler);
+  }
+
+  promise(): Promise<void> {
+    return this._sigintPromise;
+  }
+
+  hadSignal(): boolean {
+    return this._hadSignal;
+  }
+
+  disarm() {
+    process.off('SIGINT', this._sigintHandler);
+  }
+}
+

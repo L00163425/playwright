@@ -18,11 +18,12 @@ import { SelectorEngine, SelectorRoot } from './selectorEngine';
 import { XPathEngine } from './xpathSelectorEngine';
 import { ReactEngine } from './reactSelectorEngine';
 import { VueEngine } from './vueSelectorEngine';
-import { ParsedSelector, ParsedSelectorPart, parseSelector, stringifySelector } from '../common/selectorParser';
+import { allEngineNames, ParsedSelector, ParsedSelectorPart, parseSelector, stringifySelector } from '../common/selectorParser';
 import { SelectorEvaluatorImpl, isVisible, parentElementOrShadowHost, elementMatchesText, TextMatcher, createRegexTextMatcher, createStrictTextMatcher, createLaxTextMatcher } from './selectorEvaluator';
 import { CSSComplexSelectorList } from '../common/cssParser';
 import { generateSelector } from './selectorGenerator';
 import type * as channels from '../../protocol/channels';
+import { Highlight } from './highlight';
 
 type Predicate<T> = (progress: InjectedScriptProgress) => T | symbol;
 
@@ -74,6 +75,7 @@ export class InjectedScript {
   private _browserName: string;
   onGlobalListenersRemoved = new Set<() => void>();
   private _hitTargetInterceptor: undefined | ((event: MouseEvent | PointerEvent | TouchEvent) => void);
+  private _highlight: Highlight | undefined;
 
   constructor(stableRafCount: number, browserName: string, customEngines: { name: string, engine: SelectorEngine}[]) {
     this._evaluator = new SelectorEvaluatorImpl(new Map());
@@ -97,6 +99,7 @@ export class InjectedScript {
     this._engines.set('nth', { queryAll: () => [] });
     this._engines.set('visible', { queryAll: () => [] });
     this._engines.set('control', this._createControlEngine());
+    this._engines.set('has', this._createHasEngine());
 
     for (const { name, engine } of customEngines)
       this._engines.set(name, engine);
@@ -114,11 +117,15 @@ export class InjectedScript {
 
   parseSelector(selector: string): ParsedSelector {
     const result = parseSelector(selector);
-    for (const part of result.parts) {
-      if (!this._engines.has(part.name))
-        throw this.createStacklessError(`Unknown engine "${part.name}" while parsing selector ${selector}`);
+    for (const name of allEngineNames(result)) {
+      if (!this._engines.has(name))
+        throw this.createStacklessError(`Unknown engine "${name}" while parsing selector ${selector}`);
     }
     return result;
+  }
+
+  generateSelector(targetElement: Element): string {
+    return generateSelector(this, targetElement, true).selector;
   }
 
   querySelector(selector: ParsedSelector, root: Node, strict: boolean): Element | undefined {
@@ -179,7 +186,7 @@ export class InjectedScript {
       }
       let all = queryResults[index];
       if (!all) {
-        all = this._queryEngineAll(selector.parts[index], root.element);
+        all = this._queryEngineAll(part, root.element);
         queryResults[index] = all;
       }
 
@@ -274,6 +281,16 @@ export class InjectedScript {
         throw new Error(`Internal error, unknown control selector ${body}`);
       }
     };
+  }
+
+  private _createHasEngine(): SelectorEngineV2 {
+    const queryAll = (root: SelectorRoot, body: ParsedSelector) => {
+      if (root.nodeType !== 1 /* Node.ELEMENT_NODE */)
+        return [];
+      const has = !!this.querySelector(body, root, false);
+      return has ? [root as Element] : [];
+    };
+    return { queryAll };
   }
 
   extend(source: string, params: any): any {
@@ -835,7 +852,7 @@ export class InjectedScript {
   strictModeViolationError(selector: ParsedSelector, matches: Element[]): Error {
     const infos = matches.slice(0, 10).map(m => ({
       preview: this.previewNode(m),
-      selector: generateSelector(this, m).selector
+      selector: this.generateSelector(m),
     }));
     const lines = infos.map((info, i) => `\n    ${i + 1}) ${info.preview} aka playwright.$("${info.selector}")`);
     if (infos.length < matches.length)
@@ -854,6 +871,27 @@ export class InjectedScript {
     // Chromium/WebKit should delete the stack instead.
     delete error.stack;
     return error;
+  }
+
+  highlight(selector: ParsedSelector) {
+    if (!this._highlight) {
+      this._highlight = new Highlight(false);
+      this._highlight.install();
+    }
+    this._runHighlightOnRaf(selector);
+  }
+
+  _runHighlightOnRaf(selector: ParsedSelector) {
+    if (this._highlight)
+      this._highlight.updateHighlight(this.querySelectorAll(selector, document.documentElement), stringifySelector(selector), false);
+    requestAnimationFrame(() => this._runHighlightOnRaf(selector));
+  }
+
+  hideHighlight() {
+    if (this._highlight) {
+      this._highlight.uninstall();
+      delete this._highlight;
+    }
   }
 
   private _setupGlobalListenersRemovalDetection() {

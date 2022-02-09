@@ -38,7 +38,7 @@ const packageJSON = require('../../package.json');
 
 program
     .version('Version ' + (process.env.PW_CLI_DISPLAY_VERSION || packageJSON.version))
-    .name(buildBasePlaywrightCLICommand(process.env.PW_CLI_TARGET_LANG));
+    .name(buildBasePlaywrightCLICommand(process.env.PW_LANG_NAME));
 
 commandWithOpenOptions('open [url]', 'open page in browser specified via -b, --browser', [])
     .action(function(url, options) {
@@ -219,23 +219,23 @@ program
     });
 
 program
-    .command('show-trace [trace]')
+    .command('show-trace [trace...]')
     .option('-b, --browser <browserType>', 'browser to use, one of cr, chromium, ff, firefox, wk, webkit', 'chromium')
     .description('Show trace viewer')
-    .action(function(trace, options) {
+    .action(function(traces, options) {
       if (options.browser === 'cr')
         options.browser = 'chromium';
       if (options.browser === 'ff')
         options.browser = 'firefox';
       if (options.browser === 'wk')
         options.browser = 'webkit';
-      showTraceViewer(trace, options.browser, false, 9322).catch(logErrorAndExit);
+      showTraceViewer(traces, options.browser, false, 9322).catch(logErrorAndExit);
     }).addHelpText('afterAll', `
 Examples:
 
   $ show-trace https://example.com/trace.zip`);
 
-if (!process.env.PW_CLI_TARGET_LANG) {
+if (!process.env.PW_LANG_NAME) {
   let playwrightTestPackagePath = null;
   try {
     playwrightTestPackagePath = require.resolve('@playwright/test/lib/cli', {
@@ -246,6 +246,7 @@ if (!process.env.PW_CLI_TARGET_LANG) {
   if (playwrightTestPackagePath) {
     require(playwrightTestPackagePath).addTestCommand(program);
     require(playwrightTestPackagePath).addShowReportCommand(program);
+    require(playwrightTestPackagePath).addListFilesCommand(program);
   } else {
     {
       const command = program.command('test').allowUnknownOption(true);
@@ -558,7 +559,7 @@ function logErrorAndExit(e: Error) {
 }
 
 function language(): string {
-  return process.env.PW_CLI_TARGET_LANG || 'test';
+  return process.env.PW_LANG_NAME || 'test';
 }
 
 function commandWithOpenOptions(command: string, description: string, options: any[][]): Command {

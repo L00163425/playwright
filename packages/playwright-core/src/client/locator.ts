@@ -29,7 +29,7 @@ export class Locator implements api.Locator {
   private _frame: Frame;
   private _selector: string;
 
-  constructor(frame: Frame, selector: string, options?: { hasText?: string | RegExp }) {
+  constructor(frame: Frame, selector: string, options?: { hasText?: string | RegExp, has?: Locator }) {
     this._frame = frame;
     this._selector = selector;
 
@@ -39,6 +39,12 @@ export class Locator implements api.Locator {
         this._selector += ` >> :scope:text-matches(${escapeWithQuotes(text.source, '"')}, "${text.flags}")`;
       else
         this._selector += ` >> :scope:has-text(${escapeWithQuotes(text, '"')})`;
+    }
+
+    if (options?.has) {
+      if (options.has._frame !== frame)
+        throw new Error(`Inner "has" locator must belong to the same frame.`);
+      this._selector += ` >> has=` + JSON.stringify(options.has._selector);
     }
   }
 
@@ -57,6 +63,10 @@ export class Locator implements api.Locator {
         await handle.dispose();
       }
     });
+  }
+
+  page() {
+    return this._frame.page();
   }
 
   async boundingBox(options?: TimeoutOptions): Promise<Rect | null> {
@@ -81,8 +91,8 @@ export class Locator implements api.Locator {
 
   async dragTo(target: Locator, options: channels.FrameDragAndDropOptions = {}) {
     return this._frame.dragAndDrop(this._selector, target._selector, {
-      ...options,
       strict: true,
+      ...options,
     });
   }
 
@@ -102,7 +112,11 @@ export class Locator implements api.Locator {
     return this._frame.fill(this._selector, value, { strict: true, ...options });
   }
 
-  locator(selector: string, options?: { hasText?: string | RegExp }): Locator {
+  async _highlight() {
+    return this._frame._highlight(this._selector);
+  }
+
+  locator(selector: string, options?: { hasText?: string | RegExp, has?: Locator }): Locator {
     return new Locator(this._frame, this._selector + ' >> ' + selector, options);
   }
 

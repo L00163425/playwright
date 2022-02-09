@@ -63,6 +63,7 @@ export class BrowserTypeDispatcher extends Dispatcher<BrowserType, channels.Brow
       maxPayload: 256 * 1024 * 1024, // 256Mb,
       handshakeTimeout: params.timeout,
       headers: paramsHeaders,
+      followRedirects: true,
     });
     const pipe = new JsonPipeDispatcher(this._scope);
     const openPromise = new ManualPromise<{ pipe: JsonPipeDispatcher }>();
@@ -81,7 +82,7 @@ export class BrowserTypeDispatcher extends Dispatcher<BrowserType, channels.Brow
     ws.addEventListener('message', event => {
       waitForNextTask(() => {
         try {
-          pipe.dispatch(JSON.parse(event.data));
+          pipe.dispatch(JSON.parse(event.data as string));
         } catch (e) {
           ws.close();
         }

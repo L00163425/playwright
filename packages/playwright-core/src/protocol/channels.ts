@@ -32,6 +32,7 @@ export type InitializerTraits<T> =
     T extends CDPSessionChannel ? CDPSessionInitializer :
     T extends StreamChannel ? StreamInitializer :
     T extends ArtifactChannel ? ArtifactInitializer :
+    T extends TracingChannel ? TracingInitializer :
     T extends DialogChannel ? DialogInitializer :
     T extends BindingCallChannel ? BindingCallInitializer :
     T extends ConsoleMessageChannel ? ConsoleMessageInitializer :
@@ -66,6 +67,7 @@ export type EventsTraits<T> =
     T extends CDPSessionChannel ? CDPSessionEvents :
     T extends StreamChannel ? StreamEvents :
     T extends ArtifactChannel ? ArtifactEvents :
+    T extends TracingChannel ? TracingEvents :
     T extends DialogChannel ? DialogEvents :
     T extends BindingCallChannel ? BindingCallEvents :
     T extends ConsoleMessageChannel ? ConsoleMessageEvents :
@@ -100,6 +102,7 @@ export type EventTargetTraits<T> =
     T extends CDPSessionChannel ? CDPSessionEventTarget :
     T extends StreamChannel ? StreamEventTarget :
     T extends ArtifactChannel ? ArtifactEventTarget :
+    T extends TracingChannel ? TracingEventTarget :
     T extends DialogChannel ? DialogEventTarget :
     T extends BindingCallChannel ? BindingCallEventTarget :
     T extends ConsoleMessageChannel ? ConsoleMessageEventTarget :
@@ -262,7 +265,9 @@ export type FormField = {
 };
 
 // ----------- APIRequestContext -----------
-export type APIRequestContextInitializer = {};
+export type APIRequestContextInitializer = {
+  tracing: TracingChannel,
+};
 export interface APIRequestContextEventTarget {
 }
 export interface APIRequestContextChannel extends APIRequestContextEventTarget, Channel {
@@ -432,6 +437,7 @@ export interface PlaywrightChannel extends PlaywrightEventTarget, Channel {
   socksError(params: PlaywrightSocksErrorParams, metadata?: Metadata): Promise<PlaywrightSocksErrorResult>;
   socksEnd(params: PlaywrightSocksEndParams, metadata?: Metadata): Promise<PlaywrightSocksEndResult>;
   newRequest(params: PlaywrightNewRequestParams, metadata?: Metadata): Promise<PlaywrightNewRequestResult>;
+  hideHighlight(params?: PlaywrightHideHighlightParams, metadata?: Metadata): Promise<PlaywrightHideHighlightResult>;
 }
 export type PlaywrightSocksRequestedEvent = {
   uid: string,
@@ -505,6 +511,7 @@ export type PlaywrightNewRequestParams = {
     cookies: NetworkCookie[],
     origins: OriginStorage[],
   },
+  tracesDir?: string,
 };
 export type PlaywrightNewRequestOptions = {
   baseURL?: string,
@@ -526,10 +533,14 @@ export type PlaywrightNewRequestOptions = {
     cookies: NetworkCookie[],
     origins: OriginStorage[],
   },
+  tracesDir?: string,
 };
 export type PlaywrightNewRequestResult = {
   request: APIRequestContextChannel,
 };
+export type PlaywrightHideHighlightParams = {};
+export type PlaywrightHideHighlightOptions = {};
+export type PlaywrightHideHighlightResult = void;
 
 export interface PlaywrightEvents {
   'socksRequested': PlaywrightSocksRequestedEvent;
@@ -1006,6 +1017,7 @@ export interface EventTargetEvents {
 export type BrowserContextInitializer = {
   isChromium: boolean,
   APIRequestContext: APIRequestContextChannel,
+  tracing: TracingChannel,
 };
 export interface BrowserContextEventTarget {
   on(event: 'bindingCall', callback: (params: BrowserContextBindingCallEvent) => void): this;
@@ -1042,10 +1054,6 @@ export interface BrowserContextChannel extends BrowserContextEventTarget, EventT
   pause(params?: BrowserContextPauseParams, metadata?: Metadata): Promise<BrowserContextPauseResult>;
   recorderSupplementEnable(params: BrowserContextRecorderSupplementEnableParams, metadata?: Metadata): Promise<BrowserContextRecorderSupplementEnableResult>;
   newCDPSession(params: BrowserContextNewCDPSessionParams, metadata?: Metadata): Promise<BrowserContextNewCDPSessionResult>;
-  tracingStart(params: BrowserContextTracingStartParams, metadata?: Metadata): Promise<BrowserContextTracingStartResult>;
-  tracingStartChunk(params: BrowserContextTracingStartChunkParams, metadata?: Metadata): Promise<BrowserContextTracingStartChunkResult>;
-  tracingStopChunk(params: BrowserContextTracingStopChunkParams, metadata?: Metadata): Promise<BrowserContextTracingStopChunkResult>;
-  tracingStop(params?: BrowserContextTracingStopParams, metadata?: Metadata): Promise<BrowserContextTracingStopResult>;
   harExport(params?: BrowserContextHarExportParams, metadata?: Metadata): Promise<BrowserContextHarExportResult>;
 }
 export type BrowserContextBindingCallEvent = {
@@ -1245,39 +1253,6 @@ export type BrowserContextNewCDPSessionOptions = {
 export type BrowserContextNewCDPSessionResult = {
   session: CDPSessionChannel,
 };
-export type BrowserContextTracingStartParams = {
-  name?: string,
-  snapshots?: boolean,
-  screenshots?: boolean,
-  sources?: boolean,
-};
-export type BrowserContextTracingStartOptions = {
-  name?: string,
-  snapshots?: boolean,
-  screenshots?: boolean,
-  sources?: boolean,
-};
-export type BrowserContextTracingStartResult = void;
-export type BrowserContextTracingStartChunkParams = {
-  title?: string,
-};
-export type BrowserContextTracingStartChunkOptions = {
-  title?: string,
-};
-export type BrowserContextTracingStartChunkResult = void;
-export type BrowserContextTracingStopChunkParams = {
-  mode: 'doNotSave' | 'compressTrace' | 'compressTraceAndSources',
-};
-export type BrowserContextTracingStopChunkOptions = {
-
-};
-export type BrowserContextTracingStopChunkResult = {
-  artifact?: ArtifactChannel,
-  sourceEntries?: NameValue[],
-};
-export type BrowserContextTracingStopParams = {};
-export type BrowserContextTracingStopOptions = {};
-export type BrowserContextTracingStopResult = void;
 export type BrowserContextHarExportParams = {};
 export type BrowserContextHarExportOptions = {};
 export type BrowserContextHarExportResult = {
@@ -1779,6 +1754,7 @@ export interface FrameChannel extends FrameEventTarget, Channel {
   fill(params: FrameFillParams, metadata?: Metadata): Promise<FrameFillResult>;
   focus(params: FrameFocusParams, metadata?: Metadata): Promise<FrameFocusResult>;
   frameElement(params?: FrameFrameElementParams, metadata?: Metadata): Promise<FrameFrameElementResult>;
+  highlight(params: FrameHighlightParams, metadata?: Metadata): Promise<FrameHighlightResult>;
   getAttribute(params: FrameGetAttributeParams, metadata?: Metadata): Promise<FrameGetAttributeResult>;
   goto(params: FrameGotoParams, metadata?: Metadata): Promise<FrameGotoResult>;
   hover(params: FrameHoverParams, metadata?: Metadata): Promise<FrameHoverResult>;
@@ -2028,6 +2004,13 @@ export type FrameFrameElementOptions = {};
 export type FrameFrameElementResult = {
   element: ElementHandleChannel,
 };
+export type FrameHighlightParams = {
+  selector: string,
+};
+export type FrameHighlightOptions = {
+
+};
+export type FrameHighlightResult = void;
 export type FrameGetAttributeParams = {
   selector: string,
   strict?: boolean,
@@ -3210,6 +3193,54 @@ export type DialogDismissOptions = {};
 export type DialogDismissResult = void;
 
 export interface DialogEvents {
+}
+
+// ----------- Tracing -----------
+export type TracingInitializer = {};
+export interface TracingEventTarget {
+}
+export interface TracingChannel extends TracingEventTarget, Channel {
+  _type_Tracing: boolean;
+  tracingStart(params: TracingTracingStartParams, metadata?: Metadata): Promise<TracingTracingStartResult>;
+  tracingStartChunk(params: TracingTracingStartChunkParams, metadata?: Metadata): Promise<TracingTracingStartChunkResult>;
+  tracingStopChunk(params: TracingTracingStopChunkParams, metadata?: Metadata): Promise<TracingTracingStopChunkResult>;
+  tracingStop(params?: TracingTracingStopParams, metadata?: Metadata): Promise<TracingTracingStopResult>;
+}
+export type TracingTracingStartParams = {
+  name?: string,
+  snapshots?: boolean,
+  screenshots?: boolean,
+  sources?: boolean,
+};
+export type TracingTracingStartOptions = {
+  name?: string,
+  snapshots?: boolean,
+  screenshots?: boolean,
+  sources?: boolean,
+};
+export type TracingTracingStartResult = void;
+export type TracingTracingStartChunkParams = {
+  title?: string,
+};
+export type TracingTracingStartChunkOptions = {
+  title?: string,
+};
+export type TracingTracingStartChunkResult = void;
+export type TracingTracingStopChunkParams = {
+  mode: 'doNotSave' | 'compressTrace' | 'compressTraceAndSources',
+};
+export type TracingTracingStopChunkOptions = {
+
+};
+export type TracingTracingStopChunkResult = {
+  artifact?: ArtifactChannel,
+  sourceEntries?: NameValue[],
+};
+export type TracingTracingStopParams = {};
+export type TracingTracingStopOptions = {};
+export type TracingTracingStopResult = void;
+
+export interface TracingEvents {
 }
 
 // ----------- Artifact -----------

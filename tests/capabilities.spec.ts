@@ -92,7 +92,7 @@ it('should play audio #smoke', async ({ page, server, browserName, platform }) =
   await page.$eval('audio', e => e.play());
   await page.waitForTimeout(1000);
   await page.$eval('audio', e => e.pause());
-  expect(await page.$eval('audio', e => e.currentTime)).toBeGreaterThan(0.5);
+  expect(await page.$eval('audio', e => e.currentTime)).toBeGreaterThan(0.2);
 });
 
 it('should support webgl #smoke', async ({ page, browserName, headless }) => {
@@ -119,17 +119,23 @@ it('should support webgl 2 #smoke', async ({ page, browserName, headless }) => {
 
 it('should not crash on page with mp4 #smoke', async ({ page, server, platform, browserName }) => {
   it.fixme(browserName === 'webkit' && platform === 'win32', 'https://github.com/microsoft/playwright/issues/11009, times out in setContent');
+  it.fixme(browserName === 'firefox', 'https://bugzilla.mozilla.org/show_bug.cgi?id=1697004');
   await page.setContent(`<video><source src="${server.PREFIX}/movie.mp4"/></video>`);
   await page.waitForTimeout(1000);
 });
 
-it('should not crash on showDirectoryPicker', async ({ page, server, platform, browserName }) => {
+it('should not crash on showDirectoryPicker', async ({ page, server, browserName, browserMajorVersion }) => {
   it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/7339' });
-  it.fixme(browserName === 'chromium', 'https://github.com/microsoft/playwright/issues/7339, crashes');
+  it.skip(browserName === 'chromium' && browserMajorVersion < 99, 'Fixed in Chromium r956769');
   it.skip(browserName !== 'chromium', 'showDirectoryPicker is only available in Chromium');
   await page.goto(server.EMPTY_PAGE);
-  await page.evaluate(async () => {
-    const dir = await (window as any).showDirectoryPicker();
-    return dir.name;
-  });
+  await Promise.race([
+    page.evaluate(async () => {
+      const dir = await (window as any).showDirectoryPicker();
+      return dir.name;
+    }).catch(e => expect(e.message).toContain('DOMException: The user aborted a request')),
+    // The dialog will not be accepted, so we just wait for some time to
+    // to give the browser a chance to crash.
+    new Promise(r => setTimeout(r, 1000))
+  ]);
 });

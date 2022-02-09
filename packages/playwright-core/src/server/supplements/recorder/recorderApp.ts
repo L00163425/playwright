@@ -78,7 +78,7 @@ export class RecorderApp extends EventEmitter {
 
     this._page.once('close', () => {
       this.emit('close');
-      this._page.context().close(internalCallMetadata()).catch(e => console.error(e));
+      this._page.context().close(internalCallMetadata()).catch(() => {});
     });
 
     const mainFrame = this._page.mainFrame();
@@ -90,7 +90,7 @@ export class RecorderApp extends EventEmitter {
     const args = [
       '--app=data:text/html,',
       '--window-size=600,600',
-      '--window-position=1280,10',
+      '--window-position=1020,10',
       '--test-type=',
     ];
     if (process.env.PWTEST_RECORDER_PORT)

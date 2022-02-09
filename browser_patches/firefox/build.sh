@@ -36,6 +36,7 @@ elif [[ "$(uname)" == "Linux" ]]; then
 elif [[ "$(uname)" == MINGW* ]]; then
   echo "ac_add_options --disable-update-agent" >> .mozconfig
   echo "ac_add_options --disable-default-browser-agent" >> .mozconfig
+  echo "ac_add_options --disable-maintenance-service" >> .mozconfig
 
   echo "-- building win64 build on MINGW"
   echo "ac_add_options --target=x86_64-pc-mingw32" >> .mozconfig
@@ -112,10 +113,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
   fi
   export MOZ_AUTOMATION=1
   export MOZ_FETCHES_DIR=$HOME/.mozbuild
-fi
-
-if ! [[ -f "$HOME/.mozbuild/_virtualenvs/mach/bin/python" ]]; then
-  ./mach create-mach-environment
 fi
 
 if [[ $1 == "--juggler" ]]; then

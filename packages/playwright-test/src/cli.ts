@@ -73,6 +73,21 @@ Examples:
   $ npx playwright test --browser=webkit`);
 }
 
+export function addListFilesCommand(program: Command) {
+  const command = program.command('list-files [file-filter...]', { hidden: true });
+  command.description('List files with Playwright Test tests');
+  command.option('-c, --config <file>', `Configuration file, or a test directory with optional ${kDefaultConfigFiles.map(file => `"${file}"`).join('/')}`);
+  command.option('--project <project-name...>', `Only run tests from the specified list of projects (default: list all projects)`);
+  command.action(async (args, opts) => {
+    try {
+      await listTestFiles(opts);
+    } catch (e) {
+      console.error(e);
+      process.exit(1);
+    }
+  });
+}
+
 export function addShowReportCommand(program: Command) {
   const command = program.command('show-report [report]');
   command.description('show HTML report');
@@ -121,7 +136,7 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
     process.env.PWDEBUG = '1';
   }
 
-  const runner = new Runner(overrides, { defaultConfig, printResolvedConfig: process.stdout.isTTY });
+  const runner = new Runner(overrides, { defaultConfig });
 
   // When no --config option is passed, let's look for the config file in the current directory.
   const configFile = opts.config ? path.resolve(process.cwd(), opts.config) : process.cwd();
@@ -151,19 +166,29 @@ async function runTests(args: string[], opts: { [key: string]: any }) {
   process.exit(result.status === 'passed' ? 0 : 1);
 }
 
+
+async function listTestFiles(opts: { [key: string]: any }) {
+  const configFile = opts.config ? path.resolve(process.cwd(), opts.config) : process.cwd();
+  const runner = new Runner({}, { defaultConfig: {} });
+  await runner.loadConfigFromFile(configFile);
+  const report = await runner.listTestFiles(configFile, opts.project);
+  process.stdout.write(JSON.stringify(report), () => {
+    process.exit(0);
+  });
+}
+
 function forceRegExp(pattern: string): RegExp {
   const match = pattern.match(/^\/(.*)\/([gi]*)$/);
   if (match)
     return new RegExp(match[1], match[2]);
-  return new RegExp(pattern, 'gi');
+  return new RegExp(pattern.replace(/\\/g, '\\\\'), 'gi');
 }
 
 function overridesFromOptions(options: { [key: string]: any }): Config {
-  const isDebuggerAttached = !!require('inspector').url();
   const shardPair = options.shard ? options.shard.split('/').map((t: string) => parseInt(t, 10)) : undefined;
   return {
     forbidOnly: options.forbidOnly ? true : undefined,
-    globalTimeout: isDebuggerAttached ? 0 : (options.globalTimeout ? parseInt(options.globalTimeout, 10) : undefined),
+    globalTimeout: options.globalTimeout ? parseInt(options.globalTimeout, 10) : undefined,
     grep: options.grep ? forceRegExp(options.grep) : undefined,
     grepInvert: options.grepInvert ? forceRegExp(options.grepInvert) : undefined,
     maxFailures: options.x ? 1 : (options.maxFailures ? parseInt(options.maxFailures, 10) : undefined),
@@ -173,7 +198,7 @@ function overridesFromOptions(options: { [key: string]: any }): Config {
     retries: options.retries ? parseInt(options.retries, 10) : undefined,
     reporter: (options.reporter && options.reporter.length) ? options.reporter.split(',').map((r: string) => [resolveReporter(r)]) : undefined,
     shard: shardPair ? { current: shardPair[0], total: shardPair[1] } : undefined,
-    timeout: isDebuggerAttached ? 0 : (options.timeout ? parseInt(options.timeout, 10) : undefined),
+    timeout: options.timeout ? parseInt(options.timeout, 10) : undefined,
     updateSnapshots: options.updateSnapshots ? 'all' as const : undefined,
     workers: options.workers ? parseInt(options.workers, 10) : undefined,
   };

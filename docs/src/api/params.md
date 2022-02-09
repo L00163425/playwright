@@ -268,6 +268,7 @@ Toggles bypassing page's Content-Security-Policy.
 When using [`method: Page.goto`], [`method: Page.route`], [`method: Page.waitForURL`], [`method: Page.waitForRequest`], or [`method: Page.waitForResponse`] it takes the base URL in consideration by using the [`URL()`](https://developer.mozilla.org/en-US/docs/Web/API/URL/URL) constructor for building the corresponding URL. Examples:
 * baseURL: `http://localhost:3000` and navigating to `/bar.html` results in `http://localhost:3000/bar.html`
 * baseURL: `http://localhost:3000/foo/` and navigating to `./bar.html` results in `http://localhost:3000/foo/bar.html`
+* baseURL: `http://localhost:3000/foo` (without trailing slash) and navigating to `./bar.html` results in `http://localhost:3000/bar.html`
 
 ## context-option-viewport
 * langs: js, java
@@ -875,5 +876,14 @@ Slows down Playwright operations by the specified amount of milliseconds. Useful
 Matches elements containing specified text somewhere inside, possibly in a child or a descendant element.
 For example, `"Playwright"` matches `<article><div>Playwright</div></article>`.
 
+## locator-option-has
+- `has` <[Locator]>
+
+Matches elements containing an element that matches an inner locator. Inner locator is queried against the outer one.
+For example, `article` that has `text=Playwright` matches `<article><div>Playwright</div></article>`.
+
+Note that outer and inner locators must belong to the same frame. Inner locator must not contain [FrameLocator]s.
+
 ## locator-options-list
 - %%-locator-option-has-text-%%
+- %%-locator-option-has-%%

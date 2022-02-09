@@ -230,6 +230,9 @@ FormField:
 APIRequestContext:
   type: interface
 
+  initializer:
+    tracing: Tracing
+
   commands:
 
     fetch:
@@ -538,9 +541,12 @@ Playwright:
             origins:
               type: array
               items: OriginStorage
+        tracesDir: string?
 
       returns:
         request: APIRequestContext
+
+    hideHighlight:
 
   events:
     socksRequested:
@@ -705,6 +711,7 @@ BrowserContext:
   initializer:
     isChromium: boolean
     APIRequestContext: APIRequestContext
+    tracing: Tracing
 
   commands:
 
@@ -819,34 +826,6 @@ BrowserContext:
         frame: Frame?
       returns:
         session: CDPSession
-
-    tracingStart:
-      parameters:
-        name: string?
-        snapshots: boolean?
-        screenshots: boolean?
-        sources: boolean?
-
-    tracingStartChunk:
-      parameters:
-        title: string?
-
-    tracingStopChunk:
-      parameters:
-        mode:
-          type: enum
-          literals:
-          - doNotSave
-          - compressTrace
-          - compressTraceAndSources
-      returns:
-        # The artifact may be missing if the browser closes while tracing is beeing stopped.
-        artifact: Artifact?
-        sourceEntries:
-          type: array?
-          items: NameValue
-
-    tracingStop:
 
     harExport:
       returns:
@@ -1481,6 +1460,10 @@ Frame:
     frameElement:
       returns:
         element: ElementHandle
+
+    highlight:
+      parameters:
+        selector: string
 
     getAttribute:
       parameters:
@@ -2523,6 +2506,39 @@ Dialog:
 
     dismiss:
 
+
+Tracing:
+  type: interface
+
+  commands:
+
+    tracingStart:
+      parameters:
+        name: string?
+        snapshots: boolean?
+        screenshots: boolean?
+        sources: boolean?
+
+    tracingStartChunk:
+      parameters:
+        title: string?
+
+    tracingStopChunk:
+      parameters:
+        mode:
+          type: enum
+          literals:
+          - doNotSave
+          - compressTrace
+          - compressTraceAndSources
+      returns:
+        # The artifact may be missing if the browser closes while tracing is beeing stopped.
+        artifact: Artifact?
+        sourceEntries:
+          type: array?
+          items: NameValue
+
+    tracingStop:
 
 
 Artifact:

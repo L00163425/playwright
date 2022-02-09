@@ -29,7 +29,6 @@ export interface Suite {
   location?: Location;
   suites: Suite[];
   tests: TestCase[];
-  hooks: TestCase[];
   titlePath(): string[];
   allTests(): TestCase[];
   project(): FullProject | undefined;
@@ -57,6 +56,7 @@ export interface TestResult {
   duration: number;
   status: TestStatus;
   error?: TestError;
+  errors: TestError[];
   attachments: { name: string, path?: string, body?: Buffer, contentType: string }[];
   stdout: (string | Buffer)[];
   stderr: (string | Buffer)[];

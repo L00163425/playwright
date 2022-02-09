@@ -123,6 +123,12 @@ async function runPlaywrightTest(childProcess: CommonFixtures['childProcess'], b
       ...env,
       PLAYWRIGHT_DOCKER: undefined,
       PW_GRID: undefined,
+      PW_TEST_HTML_REPORT_OPEN: undefined,
+      PW_TEST_REPORTER: undefined,
+      PW_TEST_REPORTER_WS_ENDPOINT: undefined,
+      PW_TEST_SOURCE_TRANSFORM: undefined,
+      PW_OUT_OF_PROCESS_DRIVER: undefined,
+      NODE_OPTIONS: undefined,
     },
     cwd: baseDir,
   });
@@ -243,11 +249,11 @@ const TSCONFIG = {
 export { expect } from './stable-test-runner';
 
 const asciiRegex = new RegExp('[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))', 'g');
-export function stripAscii(str: string): string {
+export function stripAnsi(str: string): string {
   return str.replace(asciiRegex, '');
 }
 
-function countTimes(s: string, sub: string): number {
+export function countTimes(s: string, sub: string): number {
   let result = 0;
   for (let index = 0; index !== -1;) {
     index = s.indexOf(sub, index);

@@ -15,7 +15,7 @@
  */
 
 import { test as baseTest, expect } from './playwright-test-fixtures';
-import { HttpServer } from 'playwright-core/lib/utils/httpServer';
+import { HttpServer } from '../../packages/playwright-core/lib/utils/httpServer';
 import { startHtmlReportServer } from '../../packages/playwright-test/lib/reporters/html';
 
 const test = baseTest.extend<{ showReport: () => Promise<void> }>({
@@ -325,45 +325,6 @@ test('should render annotations', async ({ runInlineTest, page, showReport }) =>
   await expect(page.locator('.test-case-annotation')).toHaveText('skip: I am not interested in this test');
 });
 
-test('should render beforeAll/afterAll hooks', async ({ runInlineTest, page, showReport }) => {
-  const result = await runInlineTest({
-    'a.test.js': `
-      const { test } = pwt;
-      test.use({ trace: 'on' });
-      test.beforeAll(async () => {
-      });
-      test.afterAll(async ({ browser }) => {
-        const page = await browser.newPage();
-        await page.close();
-        await test.step('after step', () => {
-          throw new Error('oh!');
-        });
-      });
-      test('test', async ({}) => {
-      });
-    `,
-  }, { reporter: 'dot,html' });
-  expect(result.exitCode).toBe(1);
-  expect(result.passed).toBe(1);
-
-  await showReport();
-  await expect(page.locator('.subnav-item:has-text("All") .counter')).toHaveText('1');
-  await expect(page.locator('.subnav-item:has-text("Passed") .counter')).toHaveText('1');
-  await expect(page.locator('.subnav-item:has-text("Failed") .counter')).toHaveText('0');
-  await expect(page.locator('.subnav-item:has-text("Flaky") .counter')).toHaveText('0');
-  await expect(page.locator('.subnav-item:has-text("Skipped") .counter')).toHaveText('0');
-
-  await expect(page.locator('text=beforeAll')).toBeVisible();
-  await expect(page.locator('.test-file-test:has-text("beforeAll") svg.color-icon-success')).toHaveCount(1);
-
-  await expect(page.locator('text=afterAll')).toBeVisible();
-  await expect(page.locator('.test-file-test:has-text("afterAll") svg.color-text-danger')).toHaveCount(1);
-
-  await page.click('text=afterAll');
-  await expect(page.locator('.tree-item:has-text("after step") svg.color-text-danger')).toHaveCount(1);
-  await expect(page.locator('img')).toBeVisible();
-});
-
 test('should render text attachments as text', async ({ runInlineTest, page, showReport }) => {
   const result = await runInlineTest({
     'a.test.js': `
@@ -498,5 +459,23 @@ test('should group similar / loop steps', async ({ runInlineTest, showReport, pa
   await expect(page.locator('.tree-item-title')).toContainText([
     /expect\.toBe.*10/,
     /expect\.toEqual.*20/,
+  ]);
+});
+
+test('open tests from required file', async ({ runInlineTest, showReport, page }) => {
+  test.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/11742' });
+  const result = await runInlineTest({
+    'inner.js': `
+      const { test, expect } = pwt;
+      test('sample', async ({}) => { expect(2).toBe(2); });
+    `,
+    'a.spec.js': `require('./inner')`
+  }, { 'reporter': 'dot,html' });
+  expect(result.exitCode).toBe(0);
+  await showReport();
+  await expect(page.locator('text=a.spec.js')).toBeVisible();
+  await page.locator('text=sample').first().click();
+  await expect(page.locator('.tree-item-title')).toContainText([
+    /expect\.toBe/,
   ]);
 });

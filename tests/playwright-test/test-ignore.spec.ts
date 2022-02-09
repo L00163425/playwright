@@ -185,7 +185,7 @@ test('should match cli string argument', async ({ runInlineTest }) => {
       const { test } = pwt;
       test('pass', ({}) => {});
     `
-  }, {}, {}, { additionalArgs: [`dir\\${path.sep}a`] });
+  }, {}, {}, { additionalArgs: [`dir${path.sep}a`] });
   expect(result.passed).toBe(1);
   expect(result.report.suites.map(s => s.file).sort()).toEqual(['a.test.ts']);
   expect(result.exitCode).toBe(0);
@@ -246,78 +246,6 @@ test('should match case insensitive', async ({ runInlineTest }) => {
   expect(result.passed).toBe(2);
   expect(result.report.suites.map(s => s.file).sort()).toEqual(['capital/A.test.ts', 'lowercase/a.test.ts']);
   expect(result.exitCode).toBe(0);
-});
-
-test('should focus a single test spec', async ({ runInlineTest }) => {
-  const result = await runInlineTest({
-    'foo.test.ts': `
-      const { test } = pwt;
-      test('pass1', ({}) => {});
-      test('pass2', ({}) => {});
-      test('pass3', ({}) => {});
-    `,
-    'bar.test.ts': `
-      const { test } = pwt;
-      test('no-pass1', ({}) => {});
-    `,
-  }, {}, {}, { additionalArgs: ['foo.test.ts:7'] });
-  expect(result.exitCode).toBe(0);
-  expect(result.passed).toBe(1);
-  expect(result.skipped).toBe(0);
-  expect(result.report.suites[0].specs[0].title).toEqual('pass2');
-});
-
-test('should focus a single nested test spec', async ({ runInlineTest }) => {
-  const result = await runInlineTest({
-    'foo.test.ts': `
-      const { test } = pwt;
-      test('pass1', ({}) => {});
-      test.describe('suite-1', () => {
-        test.describe('suite-2', () => {
-          test('pass2', ({}) => {});
-        });
-      });
-      test('pass3', ({}) => {});
-    `,
-    'bar.test.ts': `
-      const { test } = pwt;
-      test('pass3', ({}) => {});
-    `,
-    'noooo.test.ts': `
-      const { test } = pwt;
-      test('no-pass1', ({}) => {});
-    `,
-  }, {}, {}, { additionalArgs: ['foo.test.ts:9', 'bar.test.ts'] });
-  expect(result.exitCode).toBe(0);
-  expect(result.passed).toBe(2);
-  expect(result.skipped).toBe(0);
-  expect(result.report.suites[0].specs[0].title).toEqual('pass3');
-  expect(result.report.suites[1].suites[0].suites[0].specs[0].title).toEqual('pass2');
-});
-
-test('should focus a single test suite', async ({ runInlineTest }) => {
-  const result = await runInlineTest({
-    'foo.test.ts': `
-      const { test } = pwt;
-      test('pass1', ({}) => {});
-      test.describe('suite-1', () => {
-        test.describe('suite-2', () => {
-          test('pass2', ({}) => {});
-          test('pass3', ({}) => {});
-        });
-      });
-      test('pass4', ({}) => {});
-    `,
-    'bar.test.ts': `
-      const { test } = pwt;
-      test('no-pass1', ({}) => {});
-    `,
-  }, {}, {}, { additionalArgs: ['foo.test.ts:8'] });
-  expect(result.exitCode).toBe(0);
-  expect(result.passed).toBe(2);
-  expect(result.skipped).toBe(0);
-  expect(result.report.suites[0].suites[0].suites[0].specs[0].title).toEqual('pass2');
-  expect(result.report.suites[0].suites[0].suites[0].specs[1].title).toEqual('pass3');
 });
 
 test('should match by directory', async ({ runInlineTest }) => {

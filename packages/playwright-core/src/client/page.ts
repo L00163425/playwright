@@ -170,10 +170,14 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   private _onRoute(route: Route, request: Request) {
     for (const routeHandler of this._routes) {
       if (routeHandler.matches(request.url())) {
-        if (routeHandler.handle(route, request)) {
-          this._routes.splice(this._routes.indexOf(routeHandler), 1);
-          if (!this._routes.length)
-            this._wrapApiCall(() => this._disableInterception(), true).catch(() => {});
+        try {
+          routeHandler.handle(route, request);
+        } finally {
+          if (!routeHandler.isActive()) {
+            this._routes.splice(this._routes.indexOf(routeHandler), 1);
+            if (!this._routes.length)
+              this._wrapApiCall(() => this._disableInterception(), true).catch(() => {});
+          }
         }
         return;
       }
@@ -511,7 +515,7 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     return this._mainFrame.fill(selector, value, options);
   }
 
-  locator(selector: string, options?: { hasText?: string | RegExp }): Locator {
+  locator(selector: string, options?: { hasText?: string | RegExp, has?: Locator }): Locator {
     return this.mainFrame().locator(selector, options);
   }
 
@@ -640,7 +644,8 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
   }
 
   async pause() {
-    await this.context()._channel.pause();
+    if (!require('inspector').url())
+      await this.context()._channel.pause();
   }
 
   async pdf(options: PDFOptions = {}): Promise<Buffer> {

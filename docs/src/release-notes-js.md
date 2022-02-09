@@ -5,6 +5,107 @@ title: "Release notes"
 
 <!-- TOC -->
 
+## Version 1.18
+
+### Locator Improvements
+
+- [`method: Locator.dragTo`]
+- [`expect(locator).toBeChecked({ checked })`](./api/class-locatorassertions#locator-assertions-to-be-checked)
+- Each locator can now be optionally filtered by the text it contains:
+    ```js
+    await page.locator('li', { hasText: 'my item' }).locator('button').click();
+    ```
+    Read more in [locator documentation](./api/class-locator#locator-locator-option-has-text)
+
+
+### Testing API improvements
+
+- [`expect(response).toBeOK()`](./api/class-apiresponseassertions)
+- [`testInfo.attach()`](./api/class-testinfo#test-info-attach)
+- [`test.info()`](./api/class-test#test-info)
+
+### Improved TypeScript Support
+
+1. Playwright Test now respects `tsconfig.json`'s [`baseUrl`](https://www.typescriptlang.org/tsconfig#baseUrl) and [`paths`](https://www.typescriptlang.org/tsconfig#paths), so you can use aliases
+1. There is a new environment variable `PW_EXPERIMENTAL_TS_ESM` that allows importing ESM modules in your TS code, without the need for the compile step. Don't forget the `.js` suffix when you are importing your esm modules. Run your tests as follows:
+
+```bash
+npm i --save-dev @playwright/test@1.18.0-rc1
+PW_EXPERIMENTAL_TS_ESM=1 npx playwright test
+```
+
+### Create Playwright
+
+The `npm init playwright` command is now generally available for your use:
+
+```sh
+# Run from your project's root directory
+npm init playwright
+# Or create a new project
+npm init playwright new-project
+```
+
+This will create a Playwright Test configuration file, optionally add examples, a GitHub Action workflow and a first test `example.spec.ts`.
+
+### New APIs & changes
+
+- new [`testCase.repeatEachIndex`](./api/class-testcase#test-case-repeat-each-index) API
+- [`acceptDownloads`](./api/class-browser#browser-new-context-option-accept-downloads) option now defaults to `true`
+
+### Breaking change: custom config options
+
+Custom config options are a convenient way to parametrize projects with different values. Learn more in [this guide](./test-parameterize#parameterized-projects).
+
+Previously, any fixture introduced through [`method: Test.extend`] could be overridden in the [`property: TestProject.use`] config section. For example,
+
+```js
+// WRONG: THIS SNIPPET DOES NOT WORK SINCE v1.18.
+
+// fixtures.js
+const test = base.extend({
+  myParameter: 'default',
+});
+
+// playwright.config.js
+module.exports = {
+  use: {
+    myParameter: 'value',
+  },
+};
+```
+
+The proper way to make a fixture parametrized in the config file is to specify `option: true` when defining the fixture. For example,
+
+```js
+// CORRECT: THIS SNIPPET WORKS SINCE v1.18.
+
+// fixtures.js
+const test = base.extend({
+  // Fixtures marked as "option: true" will get a value specified in the config,
+  // or fallback to the default value.
+  myParameter: ['default', { option: true }],
+});
+
+// playwright.config.js
+module.exports = {
+  use: {
+    myParameter: 'value',
+  },
+};
+```
+
+### Browser Versions
+
+- Chromium 99.0.4812.0
+- Mozilla Firefox 95.0
+- WebKit 15.4
+
+This version was also tested against the following stable channels:
+
+- Google Chrome 97
+- Microsoft Edge 97
+
+
 ## Version 1.17
 
 ### Frame Locators
@@ -387,8 +488,8 @@ import { PlaywrightTestConfig } from '@playwright/test';
 const config: PlaywrightTestConfig = {
   webServer: {
     command: 'npm run start', // command to launch
-    port: 3000, // port to await for 
-    timeout: 120 * 1000, 
+    port: 3000, // port to await for
+    timeout: 120 * 1000,
     reuseExistingServer: !process.env.CI,
   },
 };
@@ -427,7 +528,7 @@ Learn more in the [documentation](./test-advanced#launching-a-development-web-se
 
 - [Intro](./intro.md)
 - [Authentication](./auth.md)
-- [Chome Extensions](./chrome-extensions.md)
+- [Chrome Extensions](./chrome-extensions.md)
 - [Playwright Test Annotations](./test-annotations.md)
 - [Playwright Test Configuration](./test-configuration.md)
 - [Playwright Test Fixtures](./test-fixtures.md)

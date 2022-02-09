@@ -355,16 +355,22 @@ export type WebServerConfig = {
   command: string,
   /**
    * The port that your http server is expected to appear on. It does wait until it accepts connections.
+   * Exactly one of `port` or `url` is required.
    */
-  port: number,
+  port?: number,
+  /**
+   * The url on your http server that is expected to return a 2xx status code when the server is ready to accept connections.
+   * Exactly one of `port` or `url` is required.
+   */
+  url?: string,
   /**
    * How long to wait for the process to start up and be available in milliseconds. Defaults to 60000.
    */
   timeout?: number,
   /**
-   * If true, it will re-use an existing server on the port when available. If no server is running
-   * on that port, it will run the command to start a new server.
-   * If false, it will throw if an existing process is listening on the port.
+   * If true, it will re-use an existing server on the port or url when available. If no server is running
+   * on that port or url, it will run the command to start a new server.
+   * If false, it will throw if an existing process is listening on the port or url.
    * This should commonly set to !process.env.CI to allow the local dev server when running tests locally.
    */
   reuseExistingServer?: boolean
@@ -570,14 +576,19 @@ interface TestConfig {
   /**
    * Launch a development web server during the tests.
    *
-   * The server will wait for it to be available on `127.0.0.1` or `::1` before running the tests. For continuous
-   * integration, you may want to use the `reuseExistingServer: !process.env.CI` option which does not use an existing server
-   * on the CI.
+   * If the port is specified, the server will wait for it to be available on `127.0.0.1` or `::1`, before running the tests.
+   * If the url is specified, the server will wait for the URL to return a 2xx status code before running the tests.
    *
-   * The port gets then passed over to Playwright as a `baseURL` when creating the context
-   * [browser.newContext([options])](https://playwright.dev/docs/api/class-browser#browser-new-context). For example `8080`
-   * ends up in `baseURL` to be `http://localhost:8080`. If you want to use `https://` you need to manually specify the
-   * `baseURL` inside `use`.
+   * For continuous integration, you may want to use the `reuseExistingServer: !process.env.CI` option which does not use an
+   * existing server on the CI. To see the stdout, you can set the `DEBUG=pw:webserver` environment variable.
+   *
+   * The `port` (but not the `url`) gets passed over to Playwright as a
+   * [testOptions.baseURL](https://playwright.dev/docs/api/class-testoptions#test-options-base-url). For example port `8080`
+   * produces `baseURL` equal `http://localhost:8080`.
+   *
+   * > NOTE: It is also recommended to specify
+   * [testOptions.baseURL](https://playwright.dev/docs/api/class-testoptions#test-options-base-url) in the config, so that
+   * tests could use relative urls.
    *
    * ```ts
    * // playwright.config.ts
@@ -589,22 +600,21 @@ interface TestConfig {
    *     timeout: 120 * 1000,
    *     reuseExistingServer: !process.env.CI,
    *   },
+   *   use: {
+   *     baseURL: 'http://localhost:3000/',
+   *   },
    * };
    * export default config;
    * ```
    *
-   * Now you can use a relative path when navigating the page, or use `baseURL` fixture:
+   * Now you can use a relative path when navigating the page:
    *
    * ```ts
    * // test.spec.ts
    * import { test } from '@playwright/test';
-   * test('test', async ({ page, baseURL }) => {
-   *   // baseURL is taken directly from your web server,
-   *   // e.g. http://localhost:3000
-   *   await page.goto(baseURL + '/bar');
-   *   // Alternatively, just use relative path, because baseURL is already
-   *   // set for the default context and page.
-   *   // For example, this will result in http://localhost:3000/foo
+   *
+   * test('test', async ({ page }) => {
+   *   // This will result in http://localhost:3000/foo
    *   await page.goto('/foo');
    * });
    * ```
@@ -1059,14 +1069,19 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
   /**
    * Launch a development web server during the tests.
    *
-   * The server will wait for it to be available on `127.0.0.1` or `::1` before running the tests. For continuous
-   * integration, you may want to use the `reuseExistingServer: !process.env.CI` option which does not use an existing server
-   * on the CI.
+   * If the port is specified, the server will wait for it to be available on `127.0.0.1` or `::1`, before running the tests.
+   * If the url is specified, the server will wait for the URL to return a 2xx status code before running the tests.
    *
-   * The port gets then passed over to Playwright as a `baseURL` when creating the context
-   * [browser.newContext([options])](https://playwright.dev/docs/api/class-browser#browser-new-context). For example `8080`
-   * ends up in `baseURL` to be `http://localhost:8080`. If you want to use `https://` you need to manually specify the
-   * `baseURL` inside `use`.
+   * For continuous integration, you may want to use the `reuseExistingServer: !process.env.CI` option which does not use an
+   * existing server on the CI. To see the stdout, you can set the `DEBUG=pw:webserver` environment variable.
+   *
+   * The `port` (but not the `url`) gets passed over to Playwright as a
+   * [testOptions.baseURL](https://playwright.dev/docs/api/class-testoptions#test-options-base-url). For example port `8080`
+   * produces `baseURL` equal `http://localhost:8080`.
+   *
+   * > NOTE: It is also recommended to specify
+   * [testOptions.baseURL](https://playwright.dev/docs/api/class-testoptions#test-options-base-url) in the config, so that
+   * tests could use relative urls.
    *
    * ```ts
    * // playwright.config.ts
@@ -1078,22 +1093,21 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
    *     timeout: 120 * 1000,
    *     reuseExistingServer: !process.env.CI,
    *   },
+   *   use: {
+   *     baseURL: 'http://localhost:3000/',
+   *   },
    * };
    * export default config;
    * ```
    *
-   * Now you can use a relative path when navigating the page, or use `baseURL` fixture:
+   * Now you can use a relative path when navigating the page:
    *
    * ```ts
    * // test.spec.ts
    * import { test } from '@playwright/test';
-   * test('test', async ({ page, baseURL }) => {
-   *   // baseURL is taken directly from your web server,
-   *   // e.g. http://localhost:3000
-   *   await page.goto(baseURL + '/bar');
-   *   // Alternatively, just use relative path, because baseURL is already
-   *   // set for the default context and page.
-   *   // For example, this will result in http://localhost:3000/foo
+   *
+   * test('test', async ({ page }) => {
+   *   // This will result in http://localhost:3000/foo
    *   await page.goto('/foo');
    * });
    * ```
@@ -1482,9 +1496,14 @@ export interface TestInfo {
    */
   status?: TestStatus;
   /**
-   * An error thrown during test execution, if any.
+   * First error thrown during test execution, if any. This is equal to the first element in
+   * [testInfo.errors](https://playwright.dev/docs/api/class-testinfo#test-info-errors).
    */
   error?: TestError;
+  /**
+   * Errors thrown during test execution, if any.
+   */
+  errors: TestError[];
   /**
    * Output written to `process.stdout` or `console.log` during the test execution.
    */
@@ -1625,15 +1644,15 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * Declares a group of tests that should always be run serially. If one of the tests fails, all subsequent tests are
    * skipped. All tests in a group are retried together.
    *
+   * > NOTE: See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+   * the preferred way of configuring the execution mode.
    * > NOTE: Using serial is not recommended. It is usually better to make your tests isolated, so they can be run
    * independently.
    *
    * ```ts
    * test.describe.serial('group', () => {
-   *   test('runs first', async ({ page }) => {
-   *   });
-   *   test('runs second', async ({ page }) => {
-   *   });
+   *   test('runs first', async ({ page }) => {});
+   *   test('runs second', async ({ page }) => {});
    * });
    * ```
    *
@@ -1670,12 +1689,13 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    * but using [test.describe.parallel(title, callback)](https://playwright.dev/docs/api/class-test#test-describe-parallel)
    * allows them to run in parallel.
    *
+   * > NOTE: See [test.describe.configure([options])](https://playwright.dev/docs/api/class-test#test-describe-configure) for
+   * the preferred way of configuring the execution mode.
+   *
    * ```ts
    * test.describe.parallel('group', () => {
-   *   test('runs in parallel 1', async ({ page }) => {
-   *   });
-   *   test('runs in parallel 2', async ({ page }) => {
-   *   });
+   *   test('runs in parallel 1', async ({ page }) => {});
+   *   test('runs in parallel 2', async ({ page }) => {});
    * });
    * ```
    *
@@ -1696,6 +1716,33 @@ export interface TestType<TestArgs extends KeyValue, WorkerArgs extends KeyValue
    */
   only: SuiteFunction;
     };
+    /**
+   * Set execution mode of execution for the enclosing scope. Can be executed either on the top level or inside a describe.
+   * Configuration applies to the entire scope, regardless of whether it run before or after the test declaration.
+   *
+   * Learn more about the execution modes [here](https://playwright.dev/docs/test-parallel).
+   *
+   * Running tests in parallel:
+   *
+   * ```ts
+   * // Run all the tests in the file concurrently using parallel workers.
+   * test.describe.configure({ mode: 'parallel' });
+   * test('runs in parallel 1', async ({ page }) => {});
+   * test('runs in parallel 2', async ({ page }) => {});
+   * ```
+   *
+   * Running tests sequentially:
+   *
+   * ```ts
+   * // Annotate tests as inter-dependent.
+   * test.describe.configure({ mode: 'serial' });
+   * test('runs first', async ({ page }) => {});
+   * test('runs second', async ({ page }) => {});
+   * ```
+   *
+   * @param options
+   */
+  configure: (options: { mode?: 'parallel' | 'serial' }) => void;
   };
   /**
    * Declares a skipped test, similarly to
@@ -2611,6 +2658,17 @@ type ColorScheme = Exclude<BrowserContextOptions['colorScheme'], undefined>;
 type ExtraHTTPHeaders = Exclude<BrowserContextOptions['extraHTTPHeaders'], undefined>;
 type Proxy = Exclude<BrowserContextOptions['proxy'], undefined>;
 type StorageState = Exclude<BrowserContextOptions['storageState'], undefined>;
+type ConnectOptions = {
+  /**
+   * A browser websocket endpoint to connect to.
+   */
+  wsEndpoint: string;
+
+  /**
+   * Additional HTTP headers to be sent with web socket connect request.
+   */
+  headers?: { [key: string]: string; };
+};
 
 /**
  * Playwright Test provides many options to configure test environment, [Browser], [BrowserContext] and more.
@@ -2688,6 +2746,16 @@ export interface PlaywrightWorkerOptions {
    * [testOptions.channel](https://playwright.dev/docs/api/class-testoptions#test-options-channel) take priority over this.
    */
   launchOptions: LaunchOptions;
+  /**
+   * When connect options are specified, default
+   * [fixtures.browser](https://playwright.dev/docs/api/class-fixtures#fixtures-browser),
+   * [fixtures.context](https://playwright.dev/docs/api/class-fixtures#fixtures-context) and
+   * [fixtures.page](https://playwright.dev/docs/api/class-fixtures#fixtures-page) use the remote browser instead of
+   * launching a browser locally, and any launch options like
+   * [testOptions.headless](https://playwright.dev/docs/api/class-testoptions#test-options-headless) or
+   * [testOptions.channel](https://playwright.dev/docs/api/class-testoptions#test-options-channel) are ignored.
+   */
+  connectOptions: ConnectOptions | undefined;
   /**
    * Whether to automatically capture a screenshot after each test. Defaults to `'off'`.
    * - `'off'`: Do not capture screenshots.
@@ -2860,6 +2928,8 @@ export interface PlaywrightTestOptions {
    * constructor for building the corresponding URL. Examples:
    * - baseURL: `http://localhost:3000` and navigating to `/bar.html` results in `http://localhost:3000/bar.html`
    * - baseURL: `http://localhost:3000/foo/` and navigating to `./bar.html` results in `http://localhost:3000/foo/bar.html`
+   * - baseURL: `http://localhost:3000/foo` (without trailing slash) and navigating to `./bar.html` results in
+   *   `http://localhost:3000/bar.html`
    */
   baseURL: string | undefined;
   /**

@@ -184,7 +184,8 @@ export class Dispatcher {
       data.resultByWorkerIndex.set(worker.workerIndex, { result, stepStack: new Set(), steps: new Map() });
       result.workerIndex = worker.workerIndex;
       result.startTime = new Date(params.startWallTime);
-      this._reporter.onTestBegin?.(data.test, result);
+      if (data.test._type === 'test')
+        this._reporter.onTestBegin?.(data.test, result);
     };
     worker.addListener('testBegin', onTestBegin);
 
@@ -198,12 +199,13 @@ export class Dispatcher {
       const { result } = data.resultByWorkerIndex.get(worker.workerIndex)!;
       data.resultByWorkerIndex.delete(worker.workerIndex);
       result.duration = params.duration;
-      result.error = params.error;
+      result.errors = params.errors;
+      result.error = result.errors[0];
       result.attachments = params.attachments.map(a => ({
         name: a.name,
         path: a.path,
         contentType: a.contentType,
-        body: a.body ? Buffer.from(a.body, 'base64') : undefined
+        body: a.body !== undefined ? Buffer.from(a.body, 'base64') : undefined
       }));
       result.status = params.status;
       test.expectedStatus = params.expectedStatus;
@@ -291,7 +293,8 @@ export class Dispatcher {
         if (runningHookId) {
           const data = this._testById.get(runningHookId)!;
           const { result } = data.resultByWorkerIndex.get(worker.workerIndex)!;
-          result.error = params.fatalError;
+          result.errors = [params.fatalError];
+          result.error = result.errors[0];
           result.status = 'failed';
           this._reporter.onTestEnd?.(data.test, result);
         }
@@ -308,9 +311,11 @@ export class Dispatcher {
             result = runData.result;
           } else {
             result = data.test._appendTestResult();
-            this._reporter.onTestBegin?.(test, result);
+            if (test._type === 'test')
+              this._reporter.onTestBegin?.(test, result);
           }
-          result.error = params.fatalError;
+          result.errors = [params.fatalError];
+          result.error = result.errors[0];
           result.status = first ? 'failed' : 'skipped';
           this._reportTestEnd(test, result);
           failedTestIds.add(test._id);
@@ -354,9 +359,9 @@ export class Dispatcher {
           return true;
 
         // Emulate a "skipped" run, and drop this test from remaining.
-        const data = this._testById.get(test._id)!;
-        const result = data.test._appendTestResult();
-        this._reporter.onTestBegin?.(test, result);
+        const result = test._appendTestResult();
+        if (test._type === 'test')
+          this._reporter.onTestBegin?.(test, result);
         result.status = 'skipped';
         this._reportTestEnd(test, result);
         return false;
@@ -440,7 +445,8 @@ export class Dispatcher {
   private _reportTestEnd(test: TestCase, result: TestResult) {
     if (test._type === 'test' && result.status !== 'skipped' && result.status !== test.expectedStatus)
       ++this._failureCount;
-    this._reporter.onTestEnd?.(test, result);
+    if (test._type === 'test')
+      this._reporter.onTestEnd?.(test, result);
     const maxFailures = this._loader.fullConfig().maxFailures;
     if (maxFailures && this._failureCount === maxFailures)
       this.stop().catch(e => {});
@@ -471,7 +477,7 @@ class Worker extends EventEmitter {
     this.process = child_process.fork(path.join(__dirname, 'worker.js'), {
       detached: false,
       env: {
-        FORCE_COLOR: process.stdout.isTTY ? '1' : '0',
+        FORCE_COLOR: '1',
         DEBUG_COLORS: process.stdout.isTTY ? '1' : '0',
         TEST_WORKER_INDEX: String(this.workerIndex),
         TEST_PARALLEL_INDEX: String(this.parallelIndex),

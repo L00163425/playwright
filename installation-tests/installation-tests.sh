@@ -108,6 +108,10 @@ function test_screencast {
 function test_typescript_types {
   initialize_test "${FUNCNAME[0]}"
   copy_test_scripts
+  # @types/node@14.18.9 is the last version which is compatibel with typescript@3.7.5.
+  # After @types/node@14.18.9 URLSearchParams from @types/node conflicts with typescript's
+  # shipped types and it results in a type error / build failure.
+  npm install -D @types/node@14.18.9
 
   # install all packages.
   npm install ${PLAYWRIGHT_CORE_TGZ}
@@ -633,7 +637,7 @@ function test_playwright_test_stacks_should_work {
   copy_test_scripts
 
   echo "Running playwright test"
-  OUTPUT=$(DEBUG=pw:api npx playwright test -c . failing.spec.js || true)
+  OUTPUT=$(DEBUG=pw:api npx playwright test -c . failing.spec.js 2>&1 || true)
   if [[ "${OUTPUT}" != *"expect.toHaveText started"* ]]; then
     echo "ERROR: missing 'expect.toHaveText started' in the output"
     exit 1

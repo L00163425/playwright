@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { test, expect, stripAscii } from './playwright-test-fixtures';
+import { test, expect, stripAnsi } from './playwright-test-fixtures';
 
 test('hooks should work with fixtures', async ({ runInlineTest }) => {
   const { results } = await runInlineTest({
@@ -222,6 +222,35 @@ test('beforeAll hooks are skipped when no tests in the suite are run', async ({ 
   expect(result.passed).toBe(1);
   expect(result.output).toContain('%%beforeAll2');
   expect(result.output).not.toContain('%%beforeAll1');
+});
+
+test('beforeAll/afterAll hooks are skipped when no tests in the suite are run 2', async ({ runInlineTest }) => {
+  const result = await runInlineTest({
+    'a.test.js': `
+      const { test } = pwt;
+      test.beforeAll(() => {
+        console.log('\\n%%beforeAll1');
+      });
+      test.afterAll(() => {
+        console.log('\\n%%afterAll1');
+      });
+      test.skip('skipped1', () => {});
+      test.describe('inner', () => {
+        test.beforeAll(() => {
+          console.log('\\n%%beforeAll2');
+        });
+        test.afterAll(() => {
+          console.log('\\n%%afterAll2');
+        });
+        test.skip('skipped2', () => {});
+      });
+    `,
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.passed).toBe(0);
+  expect(result.skipped).toBe(2);
+  expect(result.output).not.toContain('%%beforeAll');
+  expect(result.output).not.toContain('%%afterAll');
 });
 
 test('should run hooks after failure', async ({ runInlineTest }) => {
@@ -546,8 +575,8 @@ test('uncaught error in beforeEach should not be masked by another error', async
   });
   expect(result.exitCode).toBe(1);
   expect(result.failed).toBe(1);
-  expect(stripAscii(result.output)).toContain('Expected: 2');
-  expect(stripAscii(result.output)).toContain('Received: 1');
+  expect(stripAnsi(result.output)).toContain('Expected: 2');
+  expect(stripAnsi(result.output)).toContain('Received: 1');
 });
 
 test('should report error from fixture teardown when beforeAll times out', async ({ runInlineTest }) => {
@@ -569,8 +598,8 @@ test('should report error from fixture teardown when beforeAll times out', async
   }, { timeout: 1000 });
   expect(result.exitCode).toBe(1);
   expect(result.failed).toBe(1);
-  expect(stripAscii(result.output)).toContain('Timeout of 1000ms exceeded in beforeAll hook.');
-  expect(stripAscii(result.output)).toContain('Error: Oh my!');
+  expect(stripAnsi(result.output)).toContain('Timeout of 1000ms exceeded in beforeAll hook.');
+  expect(stripAnsi(result.output)).toContain('Error: Oh my!');
 });
 
 test('should not hang and report results when worker process suddenly exits during afterAll', async ({ runInlineTest }) => {
@@ -584,31 +613,6 @@ test('should not hang and report results when worker process suddenly exits duri
   expect(result.exitCode).toBe(1);
   expect(result.passed).toBe(1);
   expect(result.output).toContain('Worker process exited unexpectedly');
-  expect(stripAscii(result.output)).toContain('[1/1] a.spec.js:6:7 › passed');
-  expect(stripAscii(result.output)).toContain('[1/1] a.spec.js:7:12 › afterAll');
-});
-
-test('same beforeAll running in parallel should be reported correctly', async ({ runInlineTest }) => {
-  const result = await runInlineTest({
-    'a.spec.js': `
-      const { test } = pwt;
-      test.describe.parallel('', () => {
-        test.beforeAll(async () => {
-          await new Promise(f => setTimeout(f, 3000));
-        });
-        test('test1', () => {});
-        test('test2', () => {});
-      });
-    `
-  });
-  expect(result.exitCode).toBe(0);
-  expect(result.passed).toBe(2);
-  const hook = result.report.suites[0].suites[0].hooks[0];
-  expect(hook.title).toBe('beforeAll');
-  expect(hook.tests.length).toBe(1);
-  expect(hook.tests[0].results.length).toBe(2);
-  expect(hook.tests[0].results[0].status).toBe('passed');
-  expect(hook.tests[0].results[1].status).toBe('passed');
-  const workers = [hook.tests[0].results[0].workerIndex, hook.tests[0].results[1].workerIndex];
-  expect(workers.sort()).toEqual([0, 1]);
+  expect(stripAnsi(result.output)).toContain('[1/1] a.spec.js:6:7 › passed');
+  expect(stripAnsi(result.output)).toContain('[1/1] a.spec.js:7:12 › afterAll');
 });

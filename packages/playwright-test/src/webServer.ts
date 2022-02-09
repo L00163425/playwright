@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+import http from 'http';
+import https from 'https';
 import net from 'net';
 import os from 'os';
 import stream from 'stream';
-import { monotonicTime } from './util';
-import { raceAgainstDeadline } from 'playwright-core/lib/utils/async';
+import debug from 'debug';
+import { raceAgainstTimeout } from 'playwright-core/lib/utils/async';
 import { WebServerConfig } from './types';
 import { launchProcess } from 'playwright-core/lib/utils/processLauncher';
 
@@ -33,10 +35,15 @@ const newProcessLogPrefixer = () => new stream.Transform({
   },
 });
 
+const debugWebServer = debug('pw:webserver');
+
 export class WebServer {
+  private _isAvailable: () => Promise<boolean>;
   private _killProcess?: () => Promise<void>;
   private _processExitedPromise!: Promise<any>;
-  constructor(private readonly config: WebServerConfig) { }
+  constructor(private readonly config: WebServerConfig) {
+    this._isAvailable = getIsAvailableFunction(config);
+  }
 
   public static async create(config: WebServerConfig): Promise<WebServer> {
     const webServer = new WebServer(config);
@@ -54,11 +61,11 @@ export class WebServer {
     let processExitedReject = (error: Error) => { };
     this._processExitedPromise = new Promise((_, reject) => processExitedReject = reject);
 
-    const portIsUsed = await isPortUsed(this.config.port);
-    if (portIsUsed) {
+    const isAlreadyAvailable = await this._isAvailable();
+    if (isAlreadyAvailable) {
       if (this.config.reuseExistingServer)
         return;
-      throw new Error(`Port ${this.config.port} is used, make sure that nothing is running on the port or set strict:false in config.webServer.`);
+      throw new Error(`${this.config.url ?? `http://localhost:${this.config.port}`} is already used, make sure that nothing is running on the port/url or set strict:false in config.webServer.`);
     }
 
     const { launchedProcess, kill } = await launchProcess({
@@ -79,20 +86,20 @@ export class WebServer {
     this._killProcess = kill;
 
     launchedProcess.stderr!.pipe(newProcessLogPrefixer()).pipe(process.stderr);
-    launchedProcess.stdout!.on('data', () => {});
+    launchedProcess.stdout!.on('data', (line: Buffer) => debugWebServer(line.toString()));
   }
 
   private async _waitForProcess() {
     await this._waitForAvailability();
-    const baseURL = `http://localhost:${this.config.port}`;
-    process.env.PLAYWRIGHT_TEST_BASE_URL = baseURL;
+    if (this.config.port !== undefined)
+      process.env.PLAYWRIGHT_TEST_BASE_URL = `http://localhost:${this.config.port}`;
   }
 
   private async _waitForAvailability() {
     const launchTimeout = this.config.timeout || 60 * 1000;
     const cancellationToken = { canceled: false };
     const { timedOut } = (await Promise.race([
-      raceAgainstDeadline(waitForSocket(this.config.port, 100, cancellationToken), launchTimeout + monotonicTime()),
+      raceAgainstTimeout(() => waitFor(this._isAvailable, 100, cancellationToken), launchTimeout),
       this._processExitedPromise,
     ]));
     cancellationToken.canceled = true;
@@ -119,11 +126,34 @@ async function isPortUsed(port: number): Promise<boolean> {
   return await innerIsPortUsed('127.0.0.1') || await innerIsPortUsed('::1');
 }
 
-async function waitForSocket(port: number, delay: number, cancellationToken: { canceled: boolean }) {
+async function isURLAvailable(url: URL) {
+  return new Promise<boolean>(resolve => {
+    (url.protocol === 'https:' ? https : http).get(url, res => {
+      res.resume();
+      const statusCode = res.statusCode ?? 0;
+      resolve(statusCode >= 200 && statusCode < 300);
+    }).on('error', () => {
+      resolve(false);
+    });
+  });
+}
+
+async function waitFor(waitFn: () => Promise<boolean>, delay: number, cancellationToken: { canceled: boolean }) {
   while (!cancellationToken.canceled) {
-    const connected = await isPortUsed(port);
+    const connected = await waitFn();
     if (connected)
       return;
     await new Promise(x => setTimeout(x, delay));
+  }
+}
+
+function getIsAvailableFunction({ url, port }: Pick<WebServerConfig, 'port' | 'url'>) {
+  if (url !== undefined && port === undefined) {
+    const urlObject = new URL(url);
+    return () => isURLAvailable(urlObject);
+  } else if (port !== undefined && url === undefined) {
+    return () => isPortUsed(port);
+  } else {
+    throw new Error(`Exactly one of 'port' or 'url' is required in config.webServer.`);
   }
 }

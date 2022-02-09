@@ -29,7 +29,9 @@ export class DriverTestMode implements TestMode {
   private _impl: { playwright: Playwright; stop: () => Promise<void>; };
 
   async setup() {
-    this._impl = await start();
+    this._impl = await start({
+      NODE_OPTIONS: undefined  // Hide driver process while debugging.
+    });
     return this._impl.playwright;
   }
 
@@ -42,12 +44,12 @@ export class ServiceTestMode implements TestMode {
   private _gridClient: GridClient;
 
   async setup() {
-    this._gridClient = await GridClient.connect('http://localhost:3333');
+    this._gridClient = await GridClient.connect('ws://localhost:3333');
     return this._gridClient.playwright();
   }
 
   async teardown() {
-    await this._gridClient.close();
+    this._gridClient.close();
   }
 }
 
